@@ -76,7 +76,7 @@ defmodule Ace.HTTP.Server do
               worker: worker,
               monitor: monitor,
               keep_alive: false,
-              receive_state: Ace.HTTP1.Parser.new(max_line_length: 2048),
+              receive_state: Ace.HTTP1.Parser.new(max_line_length: 8192),
               pending_ack_count: 0
             }
 
