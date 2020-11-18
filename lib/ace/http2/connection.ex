@@ -122,13 +122,17 @@ defmodule Ace.HTTP2.Connection do
         _ ->
           false
       end)
-
-    Logger.warn("Stopping stream #{stream.id} due to #{inspect(reason)}")
-    {:ok, new_stream} = Stream.send_reset(stream, :internal_error)
-    state = put_stream(state, new_stream)
-    {frames, state} = send_available(state)
-    :ok = do_send_frames(frames, state)
-    {:noreply, {buffer, state}}
+      
+    if reason != :normal do
+       Logger.warn("Stopping stream #{stream.id} due to #{inspect(reason)}")
+      {:ok, new_stream} = Stream.send_reset(stream, :internal_error)
+      state = put_stream(state, new_stream)
+      {frames, state} = send_available(state)
+      :ok = do_send_frames(frames, state)
+      {:noreply, {buffer, state}}    
+    else
+      {:noreply, {buffer, state}}
+    end
   end
 
   def handle_info(:ack, {buffer, state}) do
@@ -420,7 +424,9 @@ defmodule Ace.HTTP2.Connection do
       socket: :h2_socket
     }
 
-    {:ok, worker} = Supervisor.start_child(state.stream_supervisor, [channel])
+    {:ok, worker} =
+      DynamicSupervisor.start_child(state.stream_supervisor, Ace.HTTP.Worker.child_spec(channel))
+
     stream = Stream.reserve(stream_id, worker, state.remote_settings.initial_window_size)
     state = put_stream(state, stream)
     {stream, state}
@@ -748,7 +754,12 @@ defmodule Ace.HTTP2.Connection do
       socket: :h2_socket
     }
 
-    {:ok, worker} = Supervisor.start_child(connection.stream_supervisor, [channel])
+    {:ok, worker} =
+      DynamicSupervisor.start_child(
+        connection.stream_supervisor,
+        Ace.HTTP.Worker.child_spec(channel)
+      )
+
     stream = Stream.idle(stream_id, worker, connection.remote_settings.initial_window_size)
     {:ok, put_stream(connection, stream)}
   end
